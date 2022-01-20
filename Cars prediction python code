@@ -1,0 +1,262 @@
+import pandas as pd
+import seaborn as sns
+import numpy as np
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LinearRegression
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error
+from sklearn.metrics import accuracy_score
+
+#setting the dimensions for all the plots
+
+sns.set(rc={'figure.figsize':(11.7,8.27)})
+
+carsdat=pd.read_csv('cars_sampled.csv')
+cars=carsdat.copy()
+
+#pd.set_option('display.float_format',lambda x: '%0.3f'%x)
+#pd.set_option('display.max_columns',500)
+#print(cars.describe())
+
+#dropping unnecessary columns
+
+col=['name','dateCrawled','dateCreated','postalCode','lastSeen']
+cars=cars.drop(columns=col,axis=1)
+
+#dropping all the duplicate values
+
+cars.drop_duplicates(keep='first',inplace=True)
+
+yearwisecount=cars['yearOfRegistration'].value_counts().sort_index()
+
+#limiting the range of year of reg between 1950 and 2018 for avoiding smearing
+
+#sum(cars['yearOfRegistration'] > 2018)
+#sum(cars['yearOfRegistration'] < 1950)
+
+#sns.regplot(x='yearOfRegistration',y='price',scatter=True,fit_reg=False,data=cars)
+
+#limiting the price range between 100 and 150000
+
+pricecount=cars['price'].value_counts().sort_index()
+
+#sns.distplot(cars['price'])
+
+#sum(cars['price'] > 150000)
+#sum(cars['price'] < 100)
+
+#limiting the range of horsepower 
+
+powercount=cars['powerPS'].value_counts().sort_index()
+
+#sns.distplot(cars['powerPS'])
+
+#print(sum(cars['powerPS'] > 500))
+#print(sum(cars['powerPS'] < 10))
+
+cars=cars[(cars.yearOfRegistration <= 2018) & (cars.yearOfRegistration >= 1950)
+          & (cars.price <= 150000) & (cars.price >= 100) & (cars.powerPS<= 500) & (cars.powerPS >= 10)]
+
+#adding age column to the dataset
+
+cars['monthOfRegistration']/=12
+cars['Age']=(2018-cars['yearOfRegistration']+cars['monthOfRegistration'])
+cars['Age']=round(cars['Age'],2)
+#cars['Age'].describe()
+
+#dropping the month and year column
+
+cars=cars.drop(columns=['yearOfRegistration','monthOfRegistration'],axis=1)
+
+#visualizing after narrowing the dataset
+
+#sns.distplot(cars['Age'])
+#sns.distplot(cars['price']
+#sns.distplot(cars['powerPS'])
+#sns.regplot(x='Age',y='price',scatter=True,fit_reg=False, data=cars)
+#sns.regplot(x='powerPS',y='price',scatter=True,fit_reg=False, data=cars)
+
+#recognizing and eliminating more insignificant variables
+
+#print(cars['seller'].value_counts())
+#pd.crosstab(cars['seller'],columns='count',normalize=True)
+#print(cars['offerType'].value_counts())
+#print(cars['abtest'].value_counts())
+
+#since the test and control have no effect on the price , hence can be neglected
+
+#print(cars['vehicleType'].value_counts())
+#sns.boxplot(x='vehicleType',y='price',data=cars)
+
+#hence vehicletype affects the price
+
+#print(cars['gearbox'].value_counts())
+#print(cars['model'].value_counts())
+#print(cars['kilometer'].value_counts().sort_index())
+
+#kilometer affects price
+
+#print(cars['fuelType'].value_counts()
+#sns.boxplot(x='fuelType',y='price',data=cars)
+
+#hence the fuel type affects the pric as well
+
+#print(cars['fuelType'].value_counts()
+#sns.boxplot(x='fuelType',y='price',data=cars)
+
+#brand affects the price
+
+#print(cars['notRepairedDamage'].value_counts()
+#yes means not repaired
+#no means repaired
+#damaged variable affects price
+
+#dropping insignifant vars
+col1=['seller','abtest','offerType']
+cars=cars.drop(columns=col1,index=1)
+carsc=cars.copy()
+
+#carselect=cars.select_dtypes(exclude=[object])
+#corre=carselect.corr()
+#correl=carselect.corr().loc[:,'price'].abs().sort_values(ascending=False)
+
+#omitting all the nan values
+
+cardrop=cars.dropna(axis=0)
+
+#creating separate columns for the categorical data
+
+cardrop=pd.get_dummies(cardrop,drop_first=True)
+
+#separating the dependent and independent variables
+
+x1=cardrop.drop(['price'],axis='columns', inplace=False)
+y1=cardrop['price']
+
+#using the log of prices for dealing better with higher values
+
+price=pd.DataFrame({"Before":y1,"After":np.log(y1)})
+#price.hist()
+y1=np.log(y1)
+
+#training and testing the data
+
+xtrain,xtest,ytrain,ytest=train_test_split(x1,y1,test_size=0.3,random_state=3)
+#print(xtrain.shape,xtest.shape,ytrain.shape,ytest.shape)
+
+#creating the base model with the test data for setting the standard for future prediction models
+
+basepred=np.mean(ytest)
+basepred=np.repeat(basepred,len(ytest))
+#print(basepred)
+
+#computing root mean square mean error
+
+base_rmsc=np.sqrt(mean_squared_error(ytest,basepred))
+#print(base_rmsc)
+
+#building the linear model
+
+linear=LinearRegression(fit_intercept=True)
+model1=linear.fit(xtrain,ytrain)
+carspred1=linear.predict(xtest)
+
+#computing rmse for this model
+
+linearmse1=mean_squared_error(ytest,carspred1)
+linearrmse1=np.sqrt(linearmse1)
+#print(linearrmse)
+
+#getting the R squared value to understand the variability of y based on this model
+
+r2lineartest=model1.score(xtest,ytest)
+r2lineartrain=model1.score(xtrain,ytrain)
+#print(r2lineartest,r2lineartrain)
+
+#Diagnosis time!
+
+residual=ytest-carspred1
+#sns.regplot(x=carspred1,y=residual,scatter=True,fit_reg=False)
+#print(residual.describe())
+
+#building the random forest model
+
+rf=RandomForestRegressor(n_estimators=100,max_features='auto',max_depth=100,min_samples_split=10,min_samples_leaf=4,random_state=1)
+rfmodel=rf.fit(xtrain,ytrain)
+
+#prediction time!
+
+carspred2=rf.predict(xtest)
+mse2=mean_squared_error(ytest,carspred2)
+rmse2=np.sqrt(mse2)
+#print(rmse2)
+
+r2rftest=rfmodel.score(xtest,ytest)
+r2rftrain=rfmodel.score(xtrain,ytrain)
+
+#building the linear reg and random forest with missing data
+
+carsmissing=cars.apply(lambda x : x.fillna(x.median()) if x.dtype==float else x.fillna(x.value_counts().index[0]))
+#print(carsmissing.isna().sum())
+carsmissing=pd.get_dummies(carsmissing,drop_first=True)
+
+#repeating the same set of steps
+
+x2=carsmissing.drop(['price'],axis='columns', inplace=False)
+y2=carsmissing['price']
+
+price2=pd.DataFrame({"Before":y2,"After":np.log(y2)})
+#price.hist()
+y2=np.log(y2)
+
+xtrain2,xtest2,ytrain2,ytest2=train_test_split(x2,y2,test_size=0.3,random_state=3)
+
+basepred2=np.mean(ytest2)
+basepred2=np.repeat(basepred2,len(ytest2))
+
+base_rmsc_miss=np.sqrt(mean_squared_error(ytest2,basepred2))
+#print(base_rmsc_miss)
+
+linear2=LinearRegression(fit_intercept=True)
+model2=linear2.fit(xtrain2,ytrain2)
+carspred3=linear2.predict(xtest2)
+
+linearmse3=mean_squared_error(ytest2,carspred3)
+linearrmse3=np.sqrt(linearmse3)
+#print(linearrmse3)
+
+r2lineartest2=model2.score(xtest2,ytest2)
+r2lineartrain2=model2.score(xtrain2,ytrain2)
+
+#residual2=ytest2-carspred3
+#sns.regplot(x=carspred2,y=residual2,scatter=True,fit_reg=False)
+#print(residual2.describe())
+
+rf2=RandomForestRegressor(n_estimators=100,max_features='auto',max_depth=100,min_samples_split=10,min_samples_leaf=4,
+                          random_state=1)
+rfmodel2=rf2.fit(xtrain2,ytrain2)
+
+carspred4=rf2.predict(xtest2)
+mse4=mean_squared_error(ytest2,carspred4)
+rmse4=np.sqrt(mse4)
+
+r2rf2test=rfmodel2.score(xtest2,ytest2)
+r2rf2train=rfmodel2.score(xtrain2,ytrain2)
+
+print("Metrics for models built from data where missing values were omitted")
+print("R squared value for train from Linear Regression=  %s"% r2lineartrain)
+print("R squared value for test from Linear Regression=  %s"% r2lineartest)
+print("R squared value for train from Random Forest=  %s"% r2rftrain)
+print("R squared value for test from Random Forest=  %s"% r2rftest)
+print("Base RMSE of model built from data where missing values were omitted= %s"%basepred)
+print("RMSE value for test from Linear Regression=  %s"% linearrmse1)
+print("RMSE value for test from Random Forest=  %s"% rmse2)
+print("\n\n")
+print("Metrics for models built from data where missing values were imputed")
+print("R squared value for train from Linear Regression=  %s"% r2lineartrain2)
+print("R squared value for test from Linear Regression=  %s"% r2lineartest2)
+print("R squared value for train from Random Forest=  %s"% r2rf2train)
+print("R squared value for test from Random Forest=  %s"% r2rftest)
+print("Base RMSE of model built from data where missing values were imputed= %s"%basepred2)
+print("RMSE value for test from Linear Regression=  %s"% linearrmse3)
+print("RMSE value for test from Random Forest=  %s"% rmse4)
